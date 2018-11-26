@@ -1730,6 +1730,7 @@ struct UserDefined {
   multidone_func fmultidone;
   struct Curl_easy *dohfor; /* this is a DoH request for that transfer */
   CURLU *uh; /* URL handle for the current parsed URL */
+  long h3opts; /* the CURLOPT_H3 bitmask */
 };
 
 struct Names {

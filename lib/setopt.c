@@ -2636,6 +2636,10 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option,
       return CURLE_BAD_FUNCTION_ARGUMENT;
     data->set.upkeep_interval_ms = arg;
     break;
+  case CURLOPT_H3:
+    arg = va_arg(param, long);
+    data->set.h3opts = arg;
+    break;
   default:
     /* unknown tag and its companion, just ignore: */
     result = CURLE_UNKNOWN_OPTION;
