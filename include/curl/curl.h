@@ -2744,6 +2744,7 @@ typedef struct {
 #define CURL_VERSION_HTTPS_PROXY  (1<<21) /* HTTPS-proxy support built-in */
 #define CURL_VERSION_MULTI_SSL    (1<<22) /* Multiple SSL backends available */
 #define CURL_VERSION_BROTLI       (1<<23) /* Brotli features are present. */
+#define CURL_VERSION_HTTP3        (1<<24) /* HTTP3 support built-in */
 
  /*
  * NAME curl_version_info()

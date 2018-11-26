@@ -519,6 +519,7 @@ static const struct feat feats[] = {
   {"CharConv",       CURL_VERSION_CONV},
   {"TLS-SRP",        CURL_VERSION_TLSAUTH_SRP},
   {"HTTP2",          CURL_VERSION_HTTP2},
+  {"HTTP3",          CURL_VERSION_HTTP3},
   {"UnixSockets",    CURL_VERSION_UNIX_SOCKETS},
   {"HTTPS-proxy",    CURL_VERSION_HTTPS_PROXY},
   {"MultiSSL",       CURL_VERSION_MULTI_SSL},
