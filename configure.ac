@@ -3384,6 +3384,7 @@ dnl Check for ngtcp2
 dnl **********************************************************************
 
 OPT_TCP2="yes"
+curl_h3_msg="disabled (--with-ngtcp2)"
 
 if test "x$disable_http" = "xyes"; then
   # without HTTP, ngtcp2 is no use
