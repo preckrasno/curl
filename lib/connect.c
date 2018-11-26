@@ -1370,7 +1370,7 @@ CURLcode Curl_socket(struct connectdata *conn,
 
   addr->family = ai->ai_family;
   addr->socktype = (conn->transport == TRNSPRT_TCP) ? SOCK_STREAM : SOCK_DGRAM;
-  addr->protocol = conn->transport == TRNSPRT_UDP ? IPPROTO_UDP :
+  addr->protocol = conn->transport != TRNSPRT_TCP ? IPPROTO_UDP :
     ai->ai_protocol;
   addr->addrlen = ai->ai_addrlen;
 
