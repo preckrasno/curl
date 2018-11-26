@@ -168,10 +168,17 @@ CURLcode Curl_http_setup_conn(struct connectdata *conn)
   Curl_mime_initpart(&http->form, conn->data);
   data->req.protop = http;
 
-  if(!CONN_INUSE(conn))
-    /* if not already multi-using, setup connection details */
-    Curl_http2_setup_conn(conn);
-  Curl_http2_setup_req(data);
+  if((conn->handler->flags & PROTOPT_SSL) &&
+     (data->set.h3opts & CURLH3_DIRECT)) {
+    /* Only go h3-direct on HTTPS URLs. It needs a UDP socket */
+    conn->socktype = SOCK_DGRAM;
+  }
+  else {
+    if(!CONN_INUSE(conn))
+      /* if not already multi-using, setup connection details */
+      Curl_http2_setup_conn(conn);
+    Curl_http2_setup_req(data);
+  }
   return CURLE_OK;
 }
 
