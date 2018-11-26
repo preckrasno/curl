@@ -48,6 +48,6 @@ DPAGES = abstract-unix-socket.d anyauth.d append.d basic.d cacert.d capath.d cer
   unix-socket.d upload-file.d url.d use-ascii.d user-agent.d user.d     \
   verbose.d version.d write-out.d xattr.d request-target.d              \
   styled-output.d tls13-ciphers.d proxy-tls13-ciphers.d                 \
-  disallow-username-in-url.d haproxy-protocol.d
+  disallow-username-in-url.d haproxy-protocol.d http3-direct.d
 
 OTHERPAGES = page-footer page-header
