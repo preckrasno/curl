@@ -170,8 +170,9 @@ CURLcode Curl_http_setup_conn(struct connectdata *conn)
 
   if((conn->handler->flags & PROTOPT_SSL) &&
      (data->set.h3opts & CURLH3_DIRECT)) {
-    /* Only go h3-direct on HTTPS URLs. It needs a UDP socket */
-    conn->socktype = SOCK_DGRAM;
+    /* Only go h3-direct on HTTPS URLs. It needs a UDP socket and does the
+       QUIC dance. */
+    conn->transport = TRNSPRT_QUIC;
   }
   else {
     if(!CONN_INUSE(conn))

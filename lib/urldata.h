@@ -825,7 +825,11 @@ struct connectdata {
 
   unsigned int scope_id;  /* Scope id for IPv6 */
 
-  int socktype;  /* SOCK_STREAM or SOCK_DGRAM */
+  enum {
+    TRNSPRT_TCP = 3,
+    TRNSPRT_UDP = 4,
+    TRNSPRT_QUIC = 5
+  } transport;
 
   struct hostname host;
   char *hostname_resolve; /* host name to resolve to address, allocated */
