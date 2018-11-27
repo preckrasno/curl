@@ -125,6 +125,7 @@ typedef ssize_t (Curl_recv)(struct connectdata *conn, /* connection data */
 #include "smb.h"
 #include "wildcard.h"
 #include "multihandle.h"
+#include "quic.h"
 
 #ifdef HAVE_GSSAPI
 # ifdef HAVE_GSSGNU
@@ -830,6 +831,10 @@ struct connectdata {
     TRNSPRT_UDP = 4,
     TRNSPRT_QUIC = 5
   } transport;
+
+#ifdef USE_NGTCP2
+  struct quicsocket quic;
+#endif
 
   struct hostname host;
   char *hostname_resolve; /* host name to resolve to address, allocated */
