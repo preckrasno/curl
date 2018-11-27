@@ -2637,8 +2637,12 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option,
     data->set.upkeep_interval_ms = arg;
     break;
   case CURLOPT_H3:
+#ifdef USE_NGTCP2
     arg = va_arg(param, long);
     data->set.h3opts = arg;
+#else
+    return CURLE_NOT_BUILT_IN;
+#endif
     break;
   default:
     /* unknown tag and its companion, just ignore: */

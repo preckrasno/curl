@@ -168,11 +168,15 @@ CURLcode Curl_http_setup_conn(struct connectdata *conn)
   Curl_mime_initpart(&http->form, conn->data);
   data->req.protop = http;
 
-  if((conn->handler->flags & PROTOPT_SSL) &&
-     (data->set.h3opts & CURLH3_DIRECT)) {
-    /* Only go h3-direct on HTTPS URLs. It needs a UDP socket and does the
-       QUIC dance. */
-    conn->transport = TRNSPRT_QUIC;
+  if(data->set.h3opts & CURLH3_DIRECT) {
+    if(conn->handler->flags & PROTOPT_SSL)
+      /* Only go h3-direct on HTTPS URLs. It needs a UDP socket and does the
+         QUIC dance. */
+      conn->transport = TRNSPRT_QUIC;
+    else {
+      failf(data, "HTTP/3 requested for non-HTTPS URL");
+      return CURLE_URL_MALFORMAT;
+    }
   }
   else {
     if(!CONN_INUSE(conn))
