@@ -184,6 +184,8 @@ static const struct helptxt helptext[] = {
    "Use HTTP 2"},
   {"    --http2-prior-knowledge",
    "Use HTTP 2 without HTTP/1.1 Upgrade"},
+  {"    --http3-direct",
+   "Use HTTP v3"},
   {"    --ignore-content-length",
    "Ignore the size of the remote resource"},
   {"-i, --include",
