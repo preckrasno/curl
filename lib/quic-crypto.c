@@ -28,6 +28,10 @@
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 #include "quic-crypto.h"
+/* The last 3 #include files should be in this order */
+#include "curl_printf.h"
+#include "curl_memory.h"
+#include "memdebug.h"
 
 int Curl_qc_negotiated_prf(struct Context *ctx, SSL *ssl)
 {
