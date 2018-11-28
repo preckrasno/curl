@@ -27,6 +27,7 @@
 #include <openssl/err.h>
 #include "urldata.h"
 #include "sendf.h"
+#include "strdup.h"
 #include "quic.h"
 #include "quic-crypto.h"
 
@@ -66,6 +67,93 @@ static void quic_settings(ngtcp2_settings *s)
   s->ack_delay_exponent = NGTCP2_DEFAULT_ACK_DELAY_EXPONENT;
 }
 
+/* SSL extension functions */
+static int transport_params_add_cb(SSL *ssl, unsigned int ext_type,
+                                   unsigned int content,
+                                   const unsigned char **out,
+                                   size_t *outlen, X509 *x,
+                                   size_t chainidx, int *al, void *add_arg)
+{
+  int rv;
+  struct connectdata *conn = (struct connectdata *)SSL_get_app_data(ssl);
+  ngtcp2_transport_params params;
+  uint8_t buf[64];
+  ssize_t nwrite;
+  (void)ext_type;
+  (void)content;
+  (void)x;
+  (void)chainidx;
+  (void)add_arg;
+
+  rv = ngtcp2_conn_get_local_transport_params(
+    conn->quic.conn, &params, NGTCP2_TRANSPORT_PARAMS_TYPE_CLIENT_HELLO);
+  if(rv) {
+    *al = SSL_AD_INTERNAL_ERROR;
+    return -1;
+  }
+
+  nwrite = ngtcp2_encode_transport_params(
+    buf, sizeof(buf), NGTCP2_TRANSPORT_PARAMS_TYPE_CLIENT_HELLO, &params);
+  if(nwrite < 0) {
+    fprintf(stderr, "ngtcp2_encode_transport_params: %s\n",
+            ngtcp2_strerror((int)nwrite));
+    *al = SSL_AD_INTERNAL_ERROR;
+    return -1;
+  }
+
+  *out = Curl_memdup(buf, nwrite);
+  *outlen = nwrite;
+
+  return 1;
+}
+
+static void transport_params_free_cb(SSL *ssl, unsigned int ext_type,
+                                     unsigned int context,
+                                     const unsigned char *out,
+                                     void *add_arg)
+{
+  (void)ssl;
+  (void)ext_type;
+  (void)context;
+  (void)add_arg;
+  free((char *)out);
+}
+
+static int transport_params_parse_cb(SSL *ssl, unsigned int ext_type,
+                                     unsigned int context,
+                                     const unsigned char *in,
+                                     size_t inlen, X509 *x, size_t chainidx,
+                                     int *al, void *parse_arg)
+{
+  struct connectdata *conn = (struct connectdata *)SSL_get_app_data(ssl);
+  int rv;
+  ngtcp2_transport_params params;
+  (void)ext_type;
+  (void)context;
+  (void)x;
+  (void)chainidx;
+  (void)parse_arg;
+
+  rv = ngtcp2_decode_transport_params(
+    &params, NGTCP2_TRANSPORT_PARAMS_TYPE_ENCRYPTED_EXTENSIONS, in, inlen);
+  if(rv) {
+    fprintf(stderr, "ngtcp2_decode_transport_params: %s\n",
+            ngtcp2_strerror(rv));
+    *al = SSL_AD_ILLEGAL_PARAMETER;
+    return -1;
+  }
+
+  rv = ngtcp2_conn_set_remote_transport_params(
+    conn->quic.conn, NGTCP2_TRANSPORT_PARAMS_TYPE_ENCRYPTED_EXTENSIONS,
+    &params);
+  if(rv) {
+    *al = SSL_AD_ILLEGAL_PARAMETER;
+    return -1;
+  }
+
+  return 1;
+}
+
 static SSL_CTX *quic_ssl_ctx(struct Curl_easy *data)
 {
   SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_method());
@@ -91,24 +179,18 @@ static SSL_CTX *quic_ssl_ctx(struct Curl_easy *data)
 
   SSL_CTX_set_mode(ssl_ctx, SSL_MODE_QUIC_HACK);
 
-#if 0 /* FIX! */
-  if(SSL_CTX_add_custom_ext(
-        ssl_ctx, NGTCP2_TLSEXT_QUIC_TRANSPORT_PARAMETERS,
-        SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS,
-        transport_params_add_cb, transport_params_free_cb, nullptr,
-        transport_params_parse_cb, nullptr) != 1) {
+  if(SSL_CTX_add_custom_ext(ssl_ctx,
+                            NGTCP2_TLSEXT_QUIC_TRANSPORT_PARAMETERS,
+                            SSL_EXT_CLIENT_HELLO |
+                            SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS,
+                            transport_params_add_cb,
+                            transport_params_free_cb, NULL,
+                            transport_params_parse_cb, NULL) != 1) {
     failf(data, "SSL_CTX_add_custom_ext(NGTCP2_TLSEXT_QUIC_TRANSPORT_"
           "PARAMETERS) failed: %s\n",
           ERR_error_string(ERR_get_error(), NULL));
     return NULL;
   }
-
-  if(config.session_file) {
-    SSL_CTX_set_session_cache_mode(
-      ssl_ctx, SSL_SESS_CACHE_CLIENT | SSL_SESS_CACHE_NO_INTERNAL_STORE);
-    SSL_CTX_sess_set_new_cb(ssl_ctx, new_session_cb);
-  }
-#endif
 
   return ssl_ctx;
 }
