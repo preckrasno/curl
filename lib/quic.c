@@ -324,17 +324,32 @@ static int ssl_key_cb(SSL *ssl, int name,
 static int read_server_handshake(struct connectdata *conn,
                                  char *buf, int buflen)
 {
-#if 0 /* FIX! */
-  size_t n = CURLMIN(buflen, shandshake_.size() - nsread);
-  memcpy(buf, &shandshake[nsread], n);
-  nsread += n;
+  struct quic_handshake *hs = &conn->quic.handshake;
+  int avail = (int)(hs->len - hs->nread);
+  int n = CURLMIN(buflen, avail);
+  memcpy(buf, &hs->buf[hs->nread], n);
+  infof(conn->data, "read %d bytes of handshake data\n", n);
+  hs->nread += n;
   return n;
-#else
-  (void)conn;
-  (void)buf;
-  (void)buflen;
-  return 0;
-#endif
+}
+
+static void write_server_handshake(struct connectdata *conn,
+                                   const uint8_t *ptr, size_t datalen)
+{
+  char *p;
+  struct quic_handshake *hs = &conn->quic.handshake;
+  size_t alloclen = datalen + hs->alloclen;
+  infof(conn->data, "store %zd bytes of handshake data\n", datalen);
+  if(alloclen > hs->alloclen) {
+    alloclen *= 2;
+    p = realloc(conn->quic.handshake.buf, alloclen);
+    if(!p)
+      return; /* BAAAAAD */
+    hs->buf = p;
+    hs->alloclen = alloclen;
+  }
+  memcpy(&hs->buf[hs->len], ptr, datalen);
+  hs->len += datalen;
 }
 
 /** BIO functions ***/
@@ -525,10 +540,62 @@ static int quic_initial(ngtcp2_conn *quic, void *user_data)
   return 0;
 }
 
+static int quic_read_tls(struct connectdata *conn)
+{
+  uint8_t buf[4096];
+  size_t nread;
+
+  ERR_clear_error();
+  for(;;) {
+    int err;
+    int rv = SSL_read_ex(conn->quic.ssl, buf, sizeof(buf), &nread);
+    if(rv == 1) {
+      infof(conn->data,  "Read %zd bytes from TLS crypto stream",
+            nread);
+      continue;
+    }
+    err = SSL_get_error(conn->quic.ssl, 0);
+    switch(err) {
+    case SSL_ERROR_WANT_READ:
+    case SSL_ERROR_WANT_WRITE:
+      return 0;
+    case SSL_ERROR_SSL:
+    case SSL_ERROR_ZERO_RETURN:
+      infof(conn->data, "TLS read error: %s\n",
+            ERR_error_string(ERR_get_error(), NULL));
+      return NGTCP2_ERR_CRYPTO;
+    default:
+      infof(conn->data, "TLS read error: %d\n", err);
+      return NGTCP2_ERR_CRYPTO;
+    }
+  }
+  /* NEVER-REACHED */
+}
+
+static int quic_recv_crypto_data(ngtcp2_conn *tconn, uint64_t offset,
+                                 const uint8_t *data, size_t datalen,
+                                 void *user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  (void)offset;
+
+  write_server_handshake(conn, data, datalen);
+
+  if(!ngtcp2_conn_get_handshake_completed(tconn) &&
+     quic_tls_handshake(conn, false, false)) {
+    return NGTCP2_ERR_CRYPTO;
+  }
+
+  /* SSL_do_handshake() might not consume all data (e.g.,
+     NewSessionTicket). */
+  return quic_read_tls(conn);
+}
+
 static void quic_callbacks(ngtcp2_conn_callbacks *c)
 {
   memset(c, 0, sizeof(ngtcp2_conn_callbacks));
   c->client_initial = quic_initial;
+  c->recv_crypto_data = quic_recv_crypto_data;
 
 }
 
