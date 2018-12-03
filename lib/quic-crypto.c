@@ -68,6 +68,46 @@ int Curl_qc_negotiated_aead(struct Context *ctx, SSL *ssl)
   }
 }
 
+ssize_t Curl_qc_encrypt_pn(uint8_t *dest, size_t destlen,
+                           const uint8_t *plaintext, size_t plaintextlen,
+                           const struct Context *ctx,
+                           const uint8_t *key, size_t keylen,
+                           const uint8_t *nonce, size_t noncelen)
+{
+  EVP_CIPHER_CTX *actx = EVP_CIPHER_CTX_new();
+  size_t outlen = 0;
+  int len;
+  (void)destlen;
+  (void)keylen;
+  (void)noncelen;
+
+  if(!actx)
+    return -1;
+
+  if(EVP_EncryptInit_ex(actx, ctx->pn, NULL, key, nonce) != 1)
+    goto error;
+
+  if(EVP_EncryptUpdate(actx, dest, &len, plaintext, (int)plaintextlen) != 1)
+    goto error;
+
+  assert(len > 0);
+
+  outlen = len;
+
+  if(EVP_EncryptFinal_ex(actx, dest + outlen, &len) != 1)
+    goto error;
+
+  assert(len == 0);
+  /* outlen += len; */
+
+  EVP_CIPHER_CTX_free(actx);
+  return outlen;
+
+  error:
+  EVP_CIPHER_CTX_free(actx);
+  return -1;
+}
+
 static int hkdf_expand(uint8_t *dest, size_t destlen, const uint8_t *secret,
                        size_t secretlen, const uint8_t *info, size_t infolen,
                        const struct Context *ctx)
