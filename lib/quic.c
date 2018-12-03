@@ -591,11 +591,20 @@ static int quic_recv_crypto_data(ngtcp2_conn *tconn, uint64_t offset,
   return quic_read_tls(conn);
 }
 
+static int quic_handshake_completed(ngtcp2_conn *tconn, void *user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  (void)tconn;
+  infof(conn->data, "QUIC handshake is completed\n");
+  return 0;
+}
+
 static void quic_callbacks(ngtcp2_conn_callbacks *c)
 {
   memset(c, 0, sizeof(ngtcp2_conn_callbacks));
   c->client_initial = quic_initial;
   c->recv_crypto_data = quic_recv_crypto_data;
+  c->handshake_completed = quic_handshake_completed;
 
 }
 
