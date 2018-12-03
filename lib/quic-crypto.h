@@ -46,6 +46,18 @@ ssize_t Curl_qc_derive_pkt_num_protection_key(uint8_t *dest,
                                               size_t secretlen,
                                               const struct Context *ctx);
 size_t Curl_qc_aead_max_overhead(const struct Context *ctx);
+ssize_t Curl_qc_encrypt(uint8_t *dest, size_t destlen,
+                        const uint8_t *plaintext, size_t plaintextlen,
+                        const struct Context *ctx,
+                        const uint8_t *key, size_t keylen,
+                        const uint8_t *nonce, size_t noncelen,
+                        const uint8_t *ad, size_t adlen);
+ssize_t Curl_qc_decrypt(uint8_t *dest, size_t destlen,
+                        const uint8_t *ciphertext, size_t ciphertextlen,
+                        const struct Context *ctx,
+                        const uint8_t *key, size_t keylen,
+                        const uint8_t *nonce, size_t noncelen,
+                        const uint8_t *ad, size_t adlen);
 #endif
 
 #endif /* HEADER_CURL_QUIC_CRYPTO_H */

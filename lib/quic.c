@@ -599,13 +599,95 @@ static int quic_handshake_completed(ngtcp2_conn *tconn, void *user_data)
   return 0;
 }
 
+static ssize_t quic_in_encrypt(ngtcp2_conn *tconn,
+                               uint8_t *dest, size_t destlen,
+                               const uint8_t *plaintext,
+                               size_t plaintextlen,
+                               const uint8_t *key, size_t keylen,
+                               const uint8_t *nonce, size_t noncelen,
+                               const uint8_t *ad, size_t adlen,
+                               void *user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  ssize_t nwrite = Curl_qc_encrypt(dest, destlen, plaintext, plaintextlen,
+                                   &conn->quic.hs_crypto_ctx,
+                                   key, keylen, nonce, noncelen, ad, adlen);
+  if(nwrite < 0) {
+    return NGTCP2_ERR_CALLBACK_FAILURE;
+  }
+  (void)tconn;
+
+  return nwrite;
+}
+
+static ssize_t quic_in_decrypt(ngtcp2_conn *tconn,
+                               uint8_t *dest, size_t destlen,
+                               const uint8_t *ciphertext, size_t ciphertextlen,
+                               const uint8_t *key, size_t keylen,
+                               const uint8_t *nonce, size_t noncelen,
+                               const uint8_t *ad, size_t adlen,
+                               void *user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  (void)tconn;
+  return Curl_qc_decrypt(dest, destlen, ciphertext, ciphertextlen,
+                         &conn->quic.hs_crypto_ctx, key, keylen,
+                         nonce, noncelen, ad, adlen);
+}
+
+
+static ssize_t quic_encrypt_data(ngtcp2_conn *tconn,
+                                 uint8_t *dest, size_t destlen,
+                                 const uint8_t *plaintext, size_t plaintextlen,
+                                 const uint8_t *key, size_t keylen,
+                                 const uint8_t *nonce, size_t noncelen,
+                                 const uint8_t *ad, size_t adlen,
+                                 void *user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  ssize_t rc;
+  (void)tconn;
+  rc = Curl_qc_encrypt(dest, destlen, plaintext, plaintextlen,
+                       &conn->quic.crypto_ctx,
+                       key, keylen, nonce, noncelen, ad, adlen);
+  if(rc < 0)
+    return NGTCP2_ERR_CALLBACK_FAILURE;
+  return rc;
+}
+
+static ssize_t
+quic_decrypt_data(ngtcp2_conn *tconn,
+                  uint8_t *dest, size_t destlen,
+                  const uint8_t *ciphertext, size_t ciphertextlen,
+                  const uint8_t *key, size_t keylen,
+                  const uint8_t *nonce, size_t noncelen,
+                  const uint8_t *ad, size_t adlen,
+                  void *user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  ssize_t rc;
+  (void)tconn;
+  rc = Curl_qc_decrypt(dest, destlen, ciphertext, ciphertextlen,
+                       &conn->quic.crypto_ctx,
+                       key, keylen, nonce, noncelen, ad, adlen);
+  if(rc < 0)
+    return NGTCP2_ERR_TLS_DECRYPT;
+  return rc;
+}
+
+
+
 static void quic_callbacks(ngtcp2_conn_callbacks *c)
 {
   memset(c, 0, sizeof(ngtcp2_conn_callbacks));
   c->client_initial = quic_initial;
   c->recv_crypto_data = quic_recv_crypto_data;
   c->handshake_completed = quic_handshake_completed;
-
+  /* recv_version_negotiation = NULL */
+  c->in_encrypt = quic_in_encrypt;
+  c->in_decrypt = quic_in_decrypt;
+  c->encrypt = quic_encrypt_data;
+  c->decrypt = quic_decrypt_data;
 }
 
 

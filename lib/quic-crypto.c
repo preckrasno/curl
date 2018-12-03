@@ -169,5 +169,120 @@ size_t Curl_qc_aead_max_overhead(const struct Context *ctx)
   return aead_tag_length(ctx);
 }
 
+ssize_t Curl_qc_encrypt(uint8_t *dest, size_t destlen,
+                        const uint8_t *plaintext, size_t plaintextlen,
+                        const struct Context *ctx,
+                        const uint8_t *key, size_t keylen,
+                        const uint8_t *nonce, size_t noncelen,
+                        const uint8_t *ad, size_t adlen)
+{
+  size_t taglen = aead_tag_length(ctx);
+  EVP_CIPHER_CTX *actx;
+  size_t outlen = 0;
+  int len;
+  (void)keylen;
+
+  if(destlen < plaintextlen + taglen) {
+    return -1;
+  }
+
+  actx = EVP_CIPHER_CTX_new();
+  if(!actx)
+    return -1;
+
+  if(EVP_EncryptInit_ex(actx, ctx->aead, NULL, NULL, NULL) != 1)
+    goto error;
+
+  if(EVP_CIPHER_CTX_ctrl(actx, EVP_CTRL_AEAD_SET_IVLEN,
+                         (int)noncelen, NULL) != 1)
+    goto error;
+
+  if(EVP_EncryptInit_ex(actx, NULL, NULL, key, nonce) != 1)
+    goto error;
+
+  if(EVP_EncryptUpdate(actx, NULL, &len, ad, (int)adlen) != 1)
+    goto error;
+
+  if(EVP_EncryptUpdate(actx, dest, &len, plaintext, (int)plaintextlen) != 1)
+    goto error;
+
+  outlen = len;
+  if(EVP_EncryptFinal_ex(actx, dest + outlen, &len) != 1)
+    goto error;
+
+  outlen += len;
+  assert(outlen + taglen <= destlen);
+
+  if(EVP_CIPHER_CTX_ctrl(actx, EVP_CTRL_AEAD_GET_TAG,
+                         (int)taglen, dest + outlen) != 1)
+    goto error;
+
+  outlen += taglen;
+
+  EVP_CIPHER_CTX_free(actx);
+  return outlen;
+
+  error:
+  EVP_CIPHER_CTX_free(actx);
+  return -1;
+}
+
+ssize_t Curl_qc_decrypt(uint8_t *dest, size_t destlen,
+                        const uint8_t *ciphertext, size_t ciphertextlen,
+                        const struct Context *ctx,
+                        const uint8_t *key, size_t keylen,
+                        const uint8_t *nonce, size_t noncelen,
+                        const uint8_t *ad, size_t adlen)
+{
+  size_t taglen = aead_tag_length(ctx);
+  const uint8_t *tag;
+  EVP_CIPHER_CTX *actx;
+  size_t outlen;
+  int len;
+  (void)keylen;
+
+  if(taglen > ciphertextlen || destlen + taglen < ciphertextlen) {
+    return -1;
+  }
+
+  ciphertextlen -= taglen;
+  tag = ciphertext + ciphertextlen;
+
+  actx = EVP_CIPHER_CTX_new();
+  if(!actx)
+    return -1;
+
+  if(EVP_DecryptInit_ex(actx, ctx->aead, NULL, NULL, NULL) != 1)
+    goto error;
+
+  if(EVP_CIPHER_CTX_ctrl(actx, EVP_CTRL_AEAD_SET_IVLEN, (int)noncelen, NULL) !=
+     1)
+    goto error;
+
+  if(EVP_DecryptInit_ex(actx, NULL, NULL, key, nonce) != 1)
+    goto error;
+
+  if(EVP_DecryptUpdate(actx, NULL, &len, ad, (int)adlen) != 1)
+    goto error;
+
+  if(EVP_DecryptUpdate(actx, dest, &len, ciphertext, (int)ciphertextlen) != 1)
+    goto error;
+
+  outlen = len;
+  if(EVP_CIPHER_CTX_ctrl(actx, EVP_CTRL_AEAD_SET_TAG,
+                         (int)taglen, (char *)tag) != 1)
+    goto error;
+
+  if(EVP_DecryptFinal_ex(actx, dest + outlen, &len) != 1)
+    goto error;
+
+  outlen += len;
+
+  EVP_CIPHER_CTX_free(actx);
+  return outlen;
+  error:
+  EVP_CIPHER_CTX_free(actx);
+  return -1;
+}
 
 #endif
