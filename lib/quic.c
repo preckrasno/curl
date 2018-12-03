@@ -695,6 +695,42 @@ cb_in_encrypt_pn(ngtcp2_conn *tconn, uint8_t *dest, size_t destlen,
   return rc;
 }
 
+static ssize_t cb_encrypt_pn(ngtcp2_conn *tconn,
+                             uint8_t *dest, size_t destlen,
+                             const uint8_t *plaintext, size_t plaintextlen,
+                             const uint8_t *key, size_t keylen,
+                             const uint8_t *nonce, size_t noncelen,
+                             void *user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  ssize_t rc;
+  (void)tconn;
+
+  rc = Curl_qc_encrypt_pn(dest, destlen, plaintext, plaintextlen,
+                          &conn->quic.crypto_ctx,
+                          key, keylen, nonce, noncelen);
+  if(rc < 0)
+    return NGTCP2_ERR_CALLBACK_FAILURE;
+
+  return rc;
+}
+
+static int cb_recv_stream_data(ngtcp2_conn *tconn, uint64_t stream_id,
+                               uint8_t fin, uint64_t offset,
+                               const uint8_t *buf, size_t buflen,
+                               void *user_data, void *stream_user_data)
+{
+  struct connectdata *conn = (struct connectdata *)user_data;
+  (void)fin;
+  (void)offset;
+  (void)stream_user_data;
+  infof(conn->data, "Received %ld bytes at %p\n", buflen, buf);
+  ngtcp2_conn_extend_max_stream_offset(tconn, stream_id, buflen);
+  ngtcp2_conn_extend_max_offset(tconn, buflen);
+  return 0;
+}
+
+
 static void quic_callbacks(ngtcp2_conn_callbacks *c)
 {
   memset(c, 0, sizeof(ngtcp2_conn_callbacks));
@@ -707,6 +743,8 @@ static void quic_callbacks(ngtcp2_conn_callbacks *c)
   c->encrypt = cb_encrypt_data;
   c->decrypt = cb_decrypt_data;
   c->in_encrypt_pn = cb_in_encrypt_pn;
+  c->encrypt_pn = cb_encrypt_pn;
+  c->recv_stream_data = cb_recv_stream_data;
 }
 
 
